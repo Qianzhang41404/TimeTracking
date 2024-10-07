@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Work Time Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .timer {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #4a4a4a;
+        }
+        .btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            margin: 0 10px;
+            transition: background-color 0.3s;
+        }
+        #clockIn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #clockOut {
+            background-color: #f44336;
+            color: white;
+        }
+        #export {
+            background-color: #008CBA;
+            color: white;
+            margin-top: 20px;
+        }
+        .btn:hover {
+            opacity: 0.8;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Work Time Tracker</h1>
+        <div class="timer" id="timer">00:00:00</div>
+        <button id="clockIn" class="btn">Clock In</button>
+        <button id="clockOut" class="btn" disabled>Clock Out</button>
+        <br>
+        <button id="export" class="btn">Export</button>
+    </div>
+
+    <script>
+        let startTime, endTime, timerInterval;
+        const timer = document.getElementById('timer');
+        const clockInBtn = document.getElementById('clockIn');
+        const clockOutBtn = document.getElementById('clockOut');
+        const exportBtn = document.getElementById('export');
+
+        function updateTimer() {
+            if (!startTime) return;
+            const now = new Date();
+            const diff = now - startTime;
+            const hours = Math.floor(diff / 3600000);
+            const minutes = Math.floor((diff % 3600000) / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            timer.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function clockIn() {
+            startTime = new Date();
+            localStorage.setItem('startTime', startTime.toISOString());
+            timerInterval = setInterval(updateTimer, 1000);
+            clockInBtn.disabled = true;
+            clockOutBtn.disabled = false;
+            saveState();
+        }
+
+        function clockOut() {
+            endTime = new Date();
+            localStorage.setItem('endTime', endTime.toISOString());
+            clearInterval(timerInterval);
+            clockInBtn.disabled = false;
+            clockOutBtn.disabled = true;
+            saveState();
+            saveRecord();
+        }
+
+        function autoClockOut() {
+            const now = new Date();
+            if (now.getHours() >= 19 && startTime && !endTime) {
+                clockOut();
+            }
+        }
+
+        function exportData() {
+            const records = JSON.parse(localStorage.getItem('records') || '[]');
+            if (records.length === 0) {
+                alert("No data to export. Please clock in first.");
+                return;
+            }
+
+            let csvContent = "Date,Clock In,Clock Out,Work Hours\n";
+            records.forEach(record => {
+                csvContent += `${record.date},${record.clockIn},${record.clockOut},${record.workHours}\n`;
+            });
+            
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('hidden', '');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'work_time_log.csv');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function saveState() {
+            const state = {
+                startTime: startTime ? startTime.toISOString() : null,
+                endTime: endTime ? endTime.toISOString() : null,
+                clockInDisabled: clockInBtn.disabled,
+                clockOutDisabled: clockOutBtn.disabled
+            };
+            localStorage.setItem('state', JSON.stringify(state));
+        }
+
+        function loadState() {
+            const state = JSON.parse(localStorage.getItem('state'));
+            if (state) {
+                startTime = state.startTime ? new Date(state.startTime) : null;
+                endTime = state.endTime ? new Date(state.endTime) : null;
+                clockInBtn.disabled = state.clockInDisabled;
+                clockOutBtn.disabled = state.clockOutDisabled;
+                if (startTime && !endTime) {
+                    timerInterval = setInterval(updateTimer, 1000);
+                }
+                updateTimer();
+            }
+        }
+
+        function saveRecord() {
+            const records = JSON.parse(localStorage.getItem('records') || '[]');
+            const workHours = ((endTime - startTime) / 3600000).toFixed(2);
+            records.push({
+                date: startTime.toLocaleDateString(),
+                clockIn: startTime.toLocaleTimeString(),
+                clockOut: endTime.toLocaleTimeString(),
+                workHours: workHours
+            });
+            localStorage.setItem('records', JSON.stringify(records));
+        }
+
+        clockInBtn.addEventListener('click', clockIn);
+        clockOutBtn.addEventListener('click', clockOut);
+        exportBtn.addEventListener('click', exportData);
+
+        setInterval(autoClockOut, 60000); // Check every minute for auto clock out
+        loadState(); // Load saved state when page loads
+    </script>
+</body>
+</html>
